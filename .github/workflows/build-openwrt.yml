@@ -1,0 +1,189 @@
+#=================================================
+# Lisence: MIT
+# Author: @P3TERX，@Meloncn
+# OpenWrt Starting 固件编译自动化程序
+#=================================================
+
+name: Build OpenWrt
+
+on:
+  repository_dispatch:
+  release:
+    types: published
+  push:
+    branches:
+      - master
+    paths:
+      - 'build.config'
+#  schedule:
+#    - cron: 0 8 * * 5
+  watch:
+    types: started
+
+env:
+  REPO_URL: https://github.com/coolsnowwolf/lede
+  REPO_BRANCH: master
+  FEEDS_CONF: feeds.conf
+  CONFIG_FILE: build.config
+  DIY_P1_SH: custom1.sh
+  DIY_P2_SH: custom2.sh
+  SSH_ACTIONS: true
+  UPLOAD_BIN_DIR: false
+  UPLOAD_BIN_COWTRANSFER: false
+  UPLOAD_FIRMWARE: true
+  UPLOAD_COWTRANSFER: true
+  DEBUG_MODEL: true
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: github.event.repository.owner.id == github.event.sender.id
+
+    steps:
+    - name: 检出项目分支
+      uses: actions/checkout@master
+
+    - name: 初始化编译环境
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      if: env.DEBUG_MODEL == 'false' && !cancelled()
+      run: |
+        echo "准备清理编译环境"
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /etc/mysql /etc/php
+        echo "编译环境清理完成"
+        echo "编译环境开始升级"
+        sudo -E apt-get -yqq update
+        echo "编译环境升级完成"
+        echo "开始安装依赖软件"
+        sudo -E apt-get -yqq install $(curl -fsSL git.io/depends-ubuntu-1804)
+        sudo -E apt-get -yqq autoremove --purge
+        sudo -E apt-get -yqq clean
+        
+    - name: 创建工作目录
+      run: |
+        sudo timedatectl set-timezone "$TZ"
+        echo "时区设置完成：$TZ"
+        sudo mkdir -p /workdir
+        echo "工作目录创建完成"
+        sudo chown $USER:$GROUPS /workdir
+
+    - name: 服务器可用存储资源
+      if: (!cancelled())
+      run: |
+          echo "======================="
+          echo "Space usage:"
+          echo "======================="
+          df -hT $PWD
+          echo "======================="
+          df -h
+          echo "======================="
+          du -h ./ --max-depth=1
+          du -h /mnt/openwrt/ --max-depth=1 || true
+
+    - name: 克隆目标仓库源代码
+      working-directory: /workdir
+      run: |
+        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+   
+    - name: 导入自定义Feeds文件
+      run: |
+        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+  
+    - name: 执行自定义脚本1
+      run: |
+        chmod +x $DIY_P1_SH
+        cd openwrt
+        $GITHUB_WORKSPACE/$DIY_P1_SH
+
+    - name: 拉取最新软件包
+      run: cd openwrt && ./scripts/feeds update -a
+
+    - name: 安装软件包
+      run: cd openwrt && ./scripts/feeds install -a
+
+    - name: 执行自定义脚本2
+      run: |
+        chmod +x $DIY_P2_SH
+        cd openwrt
+        $GITHUB_WORKSPACE/$DIY_P2_SH
+    
+    - name: 载入自定义编译文件
+      run: |
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+
+    - name: SSH 连接通道开启
+      uses: P3TERX/debugger-action@master
+      if: env.SSH_ACTIONS == 'true' || contains(github.event.action, 'ssh')
+
+    - name: 下载编译所需文件
+      id: package
+      run: |
+        cd openwrt
+        make defconfig
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: 开始编译
+      id: compile
+      if: env.DEBUG_MODEL == 'false' && !cancelled()
+      run: |
+        cd openwrt
+        echo -e "$(nproc) thread compile"
+        make -j$(nproc) || make -j1 || make -j1 V=s
+        echo "::set-output name=status::success"
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+        [ -s DEVICE_NAME ] && echo "::set-env name=DEVICE_NAME::_$(cat DEVICE_NAME)"
+        echo "::set-env name=FILE_DATE::_$(date +"%Y%m%d%H%M")"
+
+    - name: 编译结束存储空间使用
+      if: (!cancelled())
+      run: |
+          echo "======================="
+          echo "Space usage:"
+          echo "======================="
+          df -h
+          echo "======================="
+          du -h ./ --max-depth=1
+          du -h /mnt/openwrt/ --max-depth=1 || true
+
+    - name: 上传 BIN 目录
+      uses: actions/upload-artifact@master
+      if: env.DEBUG_MODEL == 'false' && steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
+      with:
+        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        path: openwrt/bin
+
+    - name: 上传Bin目录到奶牛快传
+      if: env.DEBUG_MODEL == 'false' &&  steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_COWTRANSFER == 'true' && !cancelled()
+      run: |
+        curl -fsSL git.io/file-transfer | sh
+        ./transfer cow --block 2621440 -s -p 64 --no-progress openwrt/bin 2>&1 | tee cowtransfer.log
+        echo "::warning file=cowtransfer.com::$(cat cowtransfer.log | grep https)"
+
+    - name: 整理编译固件文件
+      id: organize
+      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      run: |
+        cd openwrt/bin/targets/*/*
+        rm -rf packages
+        echo "::set-env name=FIRMWARE::$PWD"
+        echo "::set-output name=status::success"
+
+    - name: 上传固件目录
+      uses: actions/upload-artifact@master
+      if: env.DEBUG_MODEL == 'false' && steps.organize.outputs.status == 'success' && !cancelled()
+      with:
+        name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE }}
+
+    - name: 上传固件目录到奶牛快传
+      if: env.DEBUG_MODEL == 'false' && steps.organize.outputs.status == 'success' && env.UPLOAD_COWTRANSFER == 'true' && !cancelled()
+      run: |
+        curl -fsSL git.io/file-transfer | sh
+        ./transfer cow --block 2621440 -s -p 64 --no-progress ${FIRMWARE} 2>&1 | tee cowtransfer.log
+        echo "::warning file=cowtransfer.com::$(cat cowtransfer.log | grep https)"
+
+  
