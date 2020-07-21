@@ -29,6 +29,7 @@ OpenWRT自动化固件编译程序。
 | `UPLOAD_BIN_COWTRANSFER` | 上传固件到奶牛快传。默认`false`                 |
 |    `UPLOAD_FIRMWARE`     | 上传固件目录。默认`true`                        |
 |   `UPLOAD_COWTRANSFER`   | 上传固件到奶牛快传。默认`false`                 |
+|     `UPLOAD_RELEASE`     | 上传固件并发布Releases。默认`false`             |
 |      `DEBUG_MODEL`       | 调试模式。仅拉取安装插件等不编译任何文件。      |
 |           `TZ`           | 时区设置                                        |
 
