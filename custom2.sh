@@ -22,6 +22,7 @@ rm -rf ./package/lean/luci-theme-argon_new readme.md README.md
 # luci-theme-argon 主题更新
 rm -rf ./package/lean/luci-theme-argon
 git clone https://github.com/jerrykuku/luci-theme-argon.git ./package/lean/luci-theme-argon/
+rm -rf ./package/lean/luci-theme-argon/README* ./package/lean/luci-theme-argon/Screenshots/
 echo "luci-theme-argon 更新完成"
 
 # luci-app-ssr-plus 插件更新
