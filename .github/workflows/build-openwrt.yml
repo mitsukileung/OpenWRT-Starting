@@ -32,7 +32,7 @@ env:
   UPLOAD_BIN_COWTRANSFER: false
   UPLOAD_FIRMWARE: true
   UPLOAD_COWTRANSFER: true
-  DEBUG_MODEL: true
+  DEBUG_MODEL: false
   TZ: Asia/Shanghai
 
 jobs:
