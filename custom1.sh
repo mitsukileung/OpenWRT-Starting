@@ -19,3 +19,7 @@
 # 脚本当前执行目录
 echo ”脚本当前执行目录“
 pwd
+
+# 修改无线相关参数
+# mv ./../OtherFile/wifi.sh ./package/kernel/mac80211/files/lib/wifi/mac80211.sh
+mv ./../OtherFile/ip.sh ./package/base-files/files/bin/config_generate

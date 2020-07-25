@@ -6,11 +6,13 @@ OpenWRT自动化固件编译程序。
 
 [Actions-OpenWrt 官方教程](https://p3terx.com/archives/build-openwrt-with-github-actions.html)
 
-## 说明：
+## 相关说明：
 
 - 根目录可上传 `build.config` 与 `feeds.conf` 配置文件。
 - `build.config` 为安装配置文件，使用  *make menuconfig*  命令生成.config 文件内容（因 . 开头文件易被系统隐藏不易管理，此处更改名称为build.config）默认为 [Lean' Lede](https://github.com/coolsnowwolf/lede) 开源项目。
 - `Feeds.conf` 为插件包Git项目地址。放在仓库根目录，自动覆盖内部文件
+- OtherFile目录为待替换脚本文件，用于修改源代码中部分文件的替换，相关命令定义在`custom1.sh`中。
+- 当处于DEBUG模式时不会编译产生文件。
 
 ## 配置：
 
@@ -61,7 +63,7 @@ OpenWRT自动化固件编译程序。
 
 #### custom1.sh
 
-当远程仓库克隆项目代码（openwrt）克隆完成后执行此脚本。执行完毕后进行 Feed 的升级和安装操作。此处可注入Feeds等操作。
+当远程仓库克隆项目代码（openwrt）克隆完成后执行此脚本，执行完毕后进行 Feed 的升级和安装操作。可进行相关脚本替换，添加软件包等编译前操作。
 
 ```
 # Add a feed source
@@ -83,11 +85,9 @@ Custom自定义脚本位置：
 
 Custom脚本自身位置：/home/runner/work/仓库名称/仓库名称/custom1/2.sh 。
 
-脚本执行目录为：/home/runner/work/仓库名称/仓库名称/openwrt 目录内。（即运行脚本时使用`pwd` 查看位置为此目录位置）
+脚本执行目录为：/home/runner/work/仓库名称/仓库名称/openwrt 目录内。
 
-openwrt目录为克隆远程项目代码时生成。远程项目代码（openwrt / lede）均在此目录下。
 
-使用命令时务必注意。
 
 
 
